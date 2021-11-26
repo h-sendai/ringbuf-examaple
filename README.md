@@ -7,4 +7,4 @@ mutex, pthread_cond_wait, pthread_cond_signalを使った実装と、
 POSIX semaphoreを使った実装。
 
 - [ringbuf-cond-wait](ringbuf-cond-wait)
-- [ringbuf-semaphore](ringbuf-semaphre)
+- [ringbuf-semaphore](ringbuf-semaphore)
