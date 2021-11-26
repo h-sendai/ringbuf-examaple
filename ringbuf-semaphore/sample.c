@@ -7,6 +7,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "set_cpu.h"
+
 #define handle_error_en(en, msg) \
     do { errno = en; perror(msg); exit(EXIT_FAILURE); } while (0)
 
@@ -19,10 +21,25 @@ int debug       = 0;
 sem_t n_stored;
 sem_t n_empty;
 
+int writer_cpu = -1;
+int reader_cpu = -1;
+
+int usage()
+{
+    char msg[] = "sample [-c writer_cpu] [-C reader_cpu]";
+    fprintf(stderr, "%s\n", msg);
+
+    return 0;
+}
+
 void *writer(void *arg)
 {
     int loop_counter = 0;
     int write_index = 0;
+
+    if (writer_cpu != -1) {
+        set_cpu(writer_cpu);
+    }
 
     while (loop_counter < MAX_LOOP_COUNT) {
         sem_wait(&n_empty);
@@ -42,6 +59,10 @@ void *reader(void *arg)
 {
     int loop_counter = 0;
     int read_index  = 0;
+
+    if (reader_cpu != -1) {
+        set_cpu(reader_cpu);
+    }
 
     while (loop_counter < MAX_LOOP_COUNT) {
         sem_wait(&n_stored);
@@ -66,6 +87,25 @@ int main(int argc, char *argv[])
     int s;
     pthread_t reader_id;
     pthread_t writer_id;
+
+    int c;
+    while ( (c = getopt(argc, argv, "hc:C:")) != -1) {
+        switch (c) {
+            case 'h':
+                usage();
+                exit(0);
+            case 'c':
+                writer_cpu = strtol(optarg, NULL, 0);
+                break;
+            case 'C':
+                reader_cpu = strtol(optarg, NULL, 0);
+                break;
+            default:
+                break;
+        }
+    }
+    argc -= optind;
+    argv += optind;
 
     sem_init(&n_stored, 0, 0);
     sem_init(&n_empty,  0, MAX_BUF);
