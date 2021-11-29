@@ -36,12 +36,22 @@ int usage()
     return 0;
 }
 
+struct ts {
+    struct timespec *ts0;
+    struct timespec *ts1;
+} ts;
+
 void *writer(void *arg)
 {
     int loop_counter = 0;
     int write_index = 0;
     
-    struct timespec *writer_tv = (struct timespec *)arg;
+    struct ts *ts = (struct ts *)arg;
+    //struct timespec *ts[2];
+    //struct timespec *writer_0_tv = ((struct timespec *)arg)[0];
+    //struct timespec *writer_1_tv = ((struct timespec *)arg)[1];
+    struct timespec *writer_0_tv = ts->ts0;
+    struct timespec *writer_1_tv = ts->ts1;
 
     if (writer_cpu != -1) {
         set_cpu(writer_cpu);
@@ -50,8 +60,9 @@ void *writer(void *arg)
     while (loop_counter < MAX_LOOP_COUNT) {
         sem_wait(&n_empty);
         buf[write_index] = write_index;
+        clock_gettime(CLOCK_MONOTONIC, &writer_0_tv[loop_counter]);
         sem_post(&n_stored);
-        clock_gettime(CLOCK_MONOTONIC, &writer_tv[loop_counter]);
+        clock_gettime(CLOCK_MONOTONIC, &writer_1_tv[loop_counter]);
         write_index ++;
         if (write_index >= MAX_BUF) {
             write_index = 0;
@@ -120,16 +131,20 @@ int main(int argc, char *argv[])
     sem_init(&n_stored, 0, 0);
     sem_init(&n_empty,  0, MAX_BUF);
 
-    struct timespec *reader_tv = malloc(sizeof(struct timespec)*MAX_LOOP_COUNT);
-    struct timespec *writer_tv = malloc(sizeof(struct timespec)*MAX_LOOP_COUNT);
-    memset(reader_tv, 'X', sizeof(struct timespec)*MAX_LOOP_COUNT);
-    memset(writer_tv, 'X', sizeof(struct timespec)*MAX_LOOP_COUNT);
+    struct timespec *reader_tv   = malloc(sizeof(struct timespec)*MAX_LOOP_COUNT);
+    struct timespec *writer_0_tv = malloc(sizeof(struct timespec)*MAX_LOOP_COUNT);
+    struct timespec *writer_1_tv = malloc(sizeof(struct timespec)*MAX_LOOP_COUNT);
+    memset(reader_tv,   'X', sizeof(struct timespec)*MAX_LOOP_COUNT);
+    memset(writer_0_tv, 'X', sizeof(struct timespec)*MAX_LOOP_COUNT);
+    memset(writer_1_tv, 'X', sizeof(struct timespec)*MAX_LOOP_COUNT);
 
     s = pthread_create(&reader_id, 0, reader, (void *)reader_tv);
     if (s != 0) {
         handle_error_en(s, "pthread_create");
     }
-    s = pthread_create(&writer_id, 0, writer, (void *)writer_tv);
+    ts.ts0 = writer_0_tv;
+    ts.ts1 = writer_1_tv;
+    s = pthread_create(&writer_id, 0, writer, (void *)&ts);
     if (s != 0) {
         handle_error_en(s, "pthread_create");
     }
@@ -143,9 +158,13 @@ int main(int argc, char *argv[])
         handle_error_en(s, "pthread_join for writer");
     }
 
-    FILE *writer_log = fopen("writer.log", "w");
-    if (writer_log == NULL) {
-        err(1, "writer.log");
+    FILE *writer_0_log = fopen("writer_0.log", "w");
+    if (writer_0_log == NULL) {
+        err(1, "writer_0.log");
+    }
+    FILE *writer_1_log = fopen("writer_1.log", "w");
+    if (writer_1_log == NULL) {
+        err(1, "writer_1.log");
     }
     FILE *reader_log = fopen("reader.log", "w");
     if (reader_log == NULL) {
@@ -153,11 +172,13 @@ int main(int argc, char *argv[])
     }
 
     for (int i = 0; i < MAX_LOOP_COUNT; ++i) {
-        fprintf(writer_log, "%ld.%09ld writer %d\n", writer_tv[i].tv_sec, writer_tv[i].tv_nsec, i);
+        fprintf(writer_0_log, "%ld.%09ld writer_0 %d\n", writer_0_tv[i].tv_sec, writer_0_tv[i].tv_nsec, i);
+        fprintf(writer_1_log, "%ld.%09ld writer_1 %d\n", writer_1_tv[i].tv_sec, writer_1_tv[i].tv_nsec, i);
         fprintf(reader_log, "%ld.%09ld reader %d\n", reader_tv[i].tv_sec, reader_tv[i].tv_nsec, i);
     }
 
-    fclose(writer_log);
+    fclose(writer_0_log);
+    fclose(writer_1_log);
     fclose(reader_log);
 
     return 0;
